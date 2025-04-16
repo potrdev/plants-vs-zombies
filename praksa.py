@@ -106,7 +106,7 @@ class Plant():
                 elif PlantTypes[self.ptype] == "Double-pea":
                     if now - self.last_shot > 1300:
                         self.last_shot = now
-                        # Schedule two shots
+
                         self.scheduled_shots.append((now, nearest))
                         self.scheduled_shots.append((now + 190, nearest))
 
@@ -168,7 +168,7 @@ class Zombie():
             coins += self.coins
 
 class Bullet:
-    def __init__(self, x, y, target, color=(164, 180, 101)):  # Default color changed to blue
+    def __init__(self, x, y, target, color=(164, 180, 101)):
         self.x = x
         self.y = y
         self.target = target
@@ -243,7 +243,7 @@ def toggle_plant_mode(index):
         plant_type_buttons[index].active = True
 
 plant_type_buttons = [
-    Button(325 + i * 150, 75, 130, 100, "#D0EAD9", f"${PlantPrices[i]}", lambda i=i: toggle_plant_mode(i))
+    Button(325 + i * 150, 75, 130, 100, "#e1f2e7", f"${PlantPrices[i]}", lambda i=i: toggle_plant_mode(i))
     for i in range(len(PlantTypes))
 ]
 
@@ -324,10 +324,6 @@ while running:
     if not wave_ready and not current_wave_zombies and now - last_wave_time >= wave_cooldown:
         wave_ready = True
 
-    bg = pg.image.load('grass.jpg').convert_alpha()
-    bg = pg.transform.scale(bg, (WIN_X, WIN_Y))
-    screen.blit(bg, (0,0))
-
     gridsize = 30
 
     for i in range(0, WIN_Y // gridsize * 2):
@@ -376,9 +372,13 @@ while running:
         screen.blit(game_over_text, (WIN_X // 2 - game_over_text.get_width() // 2, WIN_Y // 2 - 20))
         screen.blit(waves_survived_text, (WIN_X // 2 - waves_survived_text.get_width() // 2, WIN_Y // 2 + 20))
     else:
-        pg.draw.rect(screen, "#5b694e", (0, 0, WIN_X, 215))
-        pg.draw.rect(screen, "#45523a", (0, 205, WIN_X, 10))
-        
+        for i in range(0, 220 // gridsize):
+            for j in range(0, WIN_X // gridsize * 2):
+                color = "#e3b844" if ( i + j) % 2 == 0 else "#ebc254"
+                pg.draw.rect(screen, color, (gridsize * j, gridsize * i, gridsize, gridsize))
+
+        pg.draw.rect(screen, "#91721d", (0, 210, WIN_X, 10))
+
         draw_text(f"{Tower.health}", WIN_X // 2 - 20, WIN_Y // 1.65 - 8, "black")
         draw_text(f"{Tower.health}", WIN_X // 2 - 20, WIN_Y // 1.65 - 10, (255, 255, 255))
         
