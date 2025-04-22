@@ -5,7 +5,7 @@ import math
 
 pg.init()
 
-WIN_X, WIN_Y = 900, 850
+WIN_X, WIN_Y = 600, 850
 FPS = 60
 
 screen = pg.display.set_mode((WIN_X, WIN_Y))
@@ -16,6 +16,14 @@ bigfont = pg.font.SysFont("montserrat", 45)
 
 PLANT_ZONE_Y = WIN_Y // 4
 PLANT_ZONE_HEIGHT = int(WIN_Y // 1.3)
+
+plant_sound = pg.mixer.Sound("plant.wav")
+gameover_sound = pg.mixer.Sound("gameover.wav")
+shoot_sound = pg.mixer.Sound("shoot.wav")
+dead_sound = pg.mixer.Sound("dead.wav")
+#background_music = pg.mixer.Sound("music.wav")
+#background_music.set_volume(0.1)
+#background_music.play(-1)
 
 class Button:
     def __init__(self, x, y, w, h, color, text, callback):
@@ -41,29 +49,12 @@ class Tower():
         self.color = color
         self.x = WIN_X // 2
         self.y = WIN_Y // 1.65
-        self.last_shot = 0
-        self.scheduled_shots = []
 
     def take_damage(self, damage):
         self.health -= damage
         if self.health < 0:
             self.health = 0
-
-    def shoot(self, zombies):
-        now = pg.time.get_ticks()
-        nearest_enemy = self.get_nearest_enemy(zombies)
-        if nearest_enemy and now - self.last_shot > 2000:
-            Bullets.append(Bullet(self.x, self.y, nearest_enemy, color=("#36c6e2")))
-            self.last_shot = now
-
-    def get_nearest_enemy(self, zombies):
-        active_zombies = [z for z in zombies if z.active]
-        if active_zombies:
-            return min(active_zombies, key=lambda z: self.distance_to(z))
-        return None
-
-    def distance_to(self, zombie):
-        return math.hypot(self.x - zombie.x, self.y - zombie.y)
+            gameover_sound.play()
 
 class Plant():
     def __init__(self, x, y, range, ptype):
@@ -100,15 +91,17 @@ class Plant():
             nearest = min(active_zombies, key=lambda z: self.distance_to(z))
             if self.distance_to(nearest) <= self.shoot_range:
                 if PlantTypes[self.ptype] == "Peashooter":
-                    if now - self.last_shot > 900:
+                    if now - self.last_shot > 1300:
                         Bullets.append(Bullet(self.x, self.y, nearest))
+                        shoot_sound.play()
                         self.last_shot = now
                 elif PlantTypes[self.ptype] == "Double-pea":
-                    if now - self.last_shot > 1300:
+                    if now - self.last_shot > 2000:
                         self.last_shot = now
-
                         self.scheduled_shots.append((now, nearest))
+                        shoot_sound.play()
                         self.scheduled_shots.append((now + 190, nearest))
+                        shoot_sound.play()
 
     def update_shots(self):
         now = pg.time.get_ticks()
@@ -146,7 +139,7 @@ class Zombie():
 
     def draw(self):
         pg.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.width)
-        pg.draw.circle(screen, pg.Color(self.color).correct_gamma(1.5), (int(self.x), int(self.y)), self.width, 6)
+        pg.draw.circle(screen, pg.Color(self.color).correct_gamma(1.5), (int(self.x), int(self.y)), self.width, 4)
 
     def move(self, target_x, target_y):
         if not self.active:
@@ -168,12 +161,12 @@ class Zombie():
             coins += self.coins
 
 class Bullet:
-    def __init__(self, x, y, target, color=(164, 180, 101)):
+    def __init__(self, x, y, target):
         self.x = x
         self.y = y
         self.target = target
         self.speed = 10
-        self.color = color
+        self.color = pg.Color("#A4B465")
         self.active = True
         self.width = 10
         self.rect = pg.Rect(self.x - self.width // 2, self.y - self.width // 2, self.width, self.width)
@@ -204,7 +197,7 @@ Tower = Tower(100, "#328E6E")
 Plants = []
 Zombies = []
 Bullets = []
-coins = 1000
+coins = 200
 
 PlantTypes = ["Peashooter", "Double-pea"]
 PlantPrices = [100, 225]
@@ -221,10 +214,10 @@ current_wave_zombies = []
 
 waves = [
     {"normal": 5, "fast": 0,  "big": 0},
-    {"normal": 7, "fast": 1, "big": 0},
-    {"normal": 12, "fast": 3, "big": 0},
-    {"normal": 20, "fast": 5, "big": 1},
-    {"normal": 30, "fast": 10, "big": 2},
+    {"normal": 10, "fast": 1, "big": 0},
+    {"normal": 15, "fast": 3, "big": 1},
+    {"normal": 25, "fast": 5, "big": 2},
+    {"normal": 35, "fast": 10, "big": 3},
 ]
 
 def toggle_plant_mode(index):
@@ -243,7 +236,7 @@ def toggle_plant_mode(index):
         plant_type_buttons[index].active = True
 
 plant_type_buttons = [
-    Button(325 + i * 150, 75, 130, 100, "#e1f2e7", f"${PlantPrices[i]}", lambda i=i: toggle_plant_mode(i))
+    Button(175 + i * 150, 75, 130, 100, "#D0EAD9", f"${PlantPrices[i]}", lambda i=i: toggle_plant_mode(i))
     for i in range(len(PlantTypes))
 ]
 
@@ -251,7 +244,7 @@ def draw_text(text, x, y, color):
     img = font.render(text, True, color)
     screen.blit(img, (x, y))
 
-def spawn_zombie(ztype):
+def spawn_zombie (ztype):
     side = random.choice(['top', 'bottom', 'left', 'right'])
     if side == 'top': x, y = random.randint(0, WIN_X), -25
     elif side == 'bottom': x, y = random.randint(0, WIN_X), WIN_Y + 25
@@ -259,30 +252,13 @@ def spawn_zombie(ztype):
     else: x, y = WIN_X + 25, random.randint(0, WIN_Y)
 
     if ztype == "normal":
-        Zombies.append(Zombie(x, y, 1, 4, 15, "#A27B5C", 25, 10))
+        Zombies.append(Zombie(x, y, 1, 5, 15, "#A27B5C", 25, 10))
     elif ztype == "fast":
-        Zombies.append(Zombie(x, y, 2, 3, 20, "#fa692a", 15, 5))
+        Zombies.append(Zombie(x, y, 2, 5, 20, "#fa692a", 15, 5))
     elif ztype == "big":
-        Zombies.append(Zombie(x, y, 0.65, 20, 100, "#fa692a", 45, 25))
-
-def can_plant(x, y):
-    for plant in Plants:
-        if plant.x == x and plant.y == y:
-            return False
-    if Tower.x - 40 < x < Tower.x + 40 and Tower.y - 40 < y < Tower.y + 40:
-        return False
-    return True
-
-def can_plant(x, y):
-    for plant in Plants:
-        if abs(plant.x - x) < 40 and abs(plant.y - y) < 40:
-            return False
-    if Tower.x - 40 < x < Tower.x + 40 and Tower.y - 40 < y < Tower.y + 40:
-        return False
-    return True
+        Zombies.append(Zombie(x, y, 0.5, 40, 100, "#fa692a", 60, 25))
 
 running = True
-game_over = False
 while running:
     screen.fill("black")
     now = pg.time.get_ticks()
@@ -294,9 +270,10 @@ while running:
             pos = event.pos
             if plant_mode and PLANT_ZONE_Y < pos[1] < PLANT_ZONE_Y + PLANT_ZONE_HEIGHT:
                 price = PlantPrices[currentPlantIndex]
-                if coins >= price and can_plant(pos[0], pos[1]):
+                if coins >= price:
                     coins -= price
                     Plants.append(Plant(pos[0], pos[1], 300, currentPlantIndex))
+                    plant_sound.play()
                     
                     for button in plant_type_buttons:
                         button.active = False
@@ -324,22 +301,22 @@ while running:
     if not wave_ready and not current_wave_zombies and now - last_wave_time >= wave_cooldown:
         wave_ready = True
 
-    gridsize = 30
-
-    for i in range(0, WIN_Y // gridsize * 2):
-        for j in range(0, WIN_X // gridsize * 2):
-            color = "#83f74a" if ( i + j) % 2 == 0 else "#7ee84a"
-            pg.draw.rect(screen, color, (gridsize * j, gridsize * i, gridsize, gridsize))
+    bg = pg.image.load('grass.jpg').convert_alpha()
+    bg = pg.transform.scale(bg, (WIN_X, WIN_Y))
+    screen.blit(bg, (0,0))
 
     for z in Zombies:
         z.move(Tower.x, Tower.y)
         z.attack_tower(Tower)
         z.draw()
 
-    Tower.shoot(Zombies)
-
     pg.draw.circle(screen, Tower.color, ((Tower.x, Tower.y)), 40)
     pg.draw.circle(screen, "#1f664d", ((Tower.x, Tower.y)), 40, 5)
+
+    for p in Plants:
+        p.draw()
+        p.update_shots()
+        p.shoot(Zombies)
 
     for b in Bullets[:]:
         if b.active:
@@ -349,6 +326,7 @@ while running:
                 if z.active and b.rect.colliderect(z.rect):
                     z.health -= 1
                     b.active = False
+                    dead_sound.play()
                     if z.health <= 0:
                         coins += z.coins
                         z.active = False
@@ -356,59 +334,41 @@ while running:
         if not b.active or b.is_off_screen():
             Bullets.remove(b)
 
-    for p in Plants:
-        p.draw()
-        p.update_shots()
-        p.shoot(Zombies)
-
     Zombies[:] = [z for z in Zombies if z.active and z.health > 0]
 
-    if Tower.health <= 0:
-        game_over = True
+    pg.draw.rect(screen, "#5b694e", (0, 0, WIN_X, 215))
+    pg.draw.rect(screen, "#45523a", (0, 205, WIN_X, 10))
+    
+    draw_text(f"{Tower.health}", WIN_X // 2 - 20, WIN_Y // 1.65 - 8, "black")
+    draw_text(f"{Tower.health}", WIN_X // 2 - 20, WIN_Y // 1.65 - 10, (255, 255, 255))
+    
+    waveoutline = bigfont.render(f"Wave: {wave_index}/{len(waves)}", True, "black")
+    screen.blit(waveoutline, (242, 10))
+    wave = bigfont.render(f"Wave: {wave_index}/{len(waves)}", True, "white")
+    screen.blit(wave, (240, 10))
+    
+    draw_text(f"${coins}", WIN_X // 2- 18, 45, "#36360c")
+    draw_text(f"${coins}", WIN_X // 2- 20, 45, (255, 255, 100))
 
-    if game_over:
-        game_over_text = bigfont.render("GAME OVER", True, (255, 0, 0))
-        waves_survived_text = font.render(f"Waves Survived: {wave_index}", True, (255, 255, 255))
-        screen.blit(game_over_text, (WIN_X // 2 - game_over_text.get_width() // 2, WIN_Y // 2 - 20))
-        screen.blit(waves_survived_text, (WIN_X // 2 - waves_survived_text.get_width() // 2, WIN_Y // 2 + 20))
-    else:
-        for i in range(0, 220 // gridsize):
-            for j in range(0, WIN_X // gridsize * 2):
-                color = "#e3b844" if ( i + j) % 2 == 0 else "#ebc254"
-                pg.draw.rect(screen, color, (gridsize * j, gridsize * i, gridsize, gridsize))
-
-        pg.draw.rect(screen, "#91721d", (0, 210, WIN_X, 10))
-
-        draw_text(f"{Tower.health}", WIN_X // 2 - 20, WIN_Y // 1.65 - 8, "black")
-        draw_text(f"{Tower.health}", WIN_X // 2 - 20, WIN_Y // 1.65 - 10, (255, 255, 255))
+    for i, b in enumerate(plant_type_buttons):
+        b.draw()
         
-        waveoutline = bigfont.render(f"Wave: {wave_index}/{len(waves)}", True, "black")
-        screen.blit(waveoutline, (WIN_X // 2 - 58, 10))
-        wave = bigfont.render(f"Wave: {wave_index}/{len(waves)}", True, "white")
-        screen.blit(wave, (WIN_X // 2 - 60, 10))
-        
-        draw_text(f"${coins}", WIN_X // 2 - 18, 45, "#36360c")
-        draw_text(f"${coins}", WIN_X // 2 - 20, 45, (255, 255, 100))
-
-        for i, b in enumerate(plant_type_buttons):
-            b.draw()
-            
-        peashooterui = pg.image.load('peashooter.png').convert_alpha()
-        peashooterui = pg.transform.scale(peashooterui, (70, 70))
-        screen.blit(peashooterui, ((357, 105)))
-        
-        doublepeaui = pg.image.load('doublepea.png').convert_alpha()
-        doublepeaui = pg.transform.scale(doublepeaui, (70, 70))
-        screen.blit(doublepeaui, ((503, 105)))
-        
-        if plant_mode:
-            mx, my = pg.mouse.get_pos()
-            if PLANT_ZONE_Y < my < PLANT_ZONE_Y + PLANT_ZONE_HEIGHT:
-                c = pg.Color("#5d9ac9")
-                c.a = 150
-                s = pg.Surface((40, 40), pg.SRCALPHA)
-                pg.draw.circle(s, c, (20, 20), 20)
-                screen.blit(s, (mx - 20, my - 20))
+    peashooterui = pg.image.load('peashooter.png').convert_alpha()
+    peashooterui = pg.transform.scale(peashooterui, (70, 70))
+    screen.blit(peashooterui, ((207, 105)))
+    
+    doublepeaui = pg.image.load('doublepea.png').convert_alpha()
+    doublepeaui = pg.transform.scale(doublepeaui, (70, 70))
+    screen.blit(doublepeaui, ((353, 105)))
+    
+    if plant_mode:
+        mx, my = pg.mouse.get_pos()
+        if PLANT_ZONE_Y < my < PLANT_ZONE_Y + PLANT_ZONE_HEIGHT:
+            c = pg.Color("#5d9ac9")
+            c.a = 150
+            s = pg.Surface((40, 40), pg.SRCALPHA)
+            pg.draw.circle(s, c, (20, 20), 20)
+            screen.blit(s, (mx - 20, my - 20))
 
     clock.tick(FPS)
     pg.display.flip()
